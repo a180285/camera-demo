@@ -32,9 +32,12 @@ extension CameraController {
     func prepare(completionHandler: @escaping (Error?) -> Void) {
         func createCaptureSession() {
             self.captureSession = AVCaptureSession()
+            self.captureSession?.sessionPreset = AVCaptureSessionPresetInputPriority
+
         }
         
         func configureCaptureDevices() throws {
+
             let session = AVCaptureDeviceDiscoverySession(deviceTypes: [.builtInWideAngleCamera], mediaType: AVMediaTypeVideo, position: .unspecified)
             guard let cameras = (session?.devices.flatMap { $0 }), !cameras.isEmpty else { throw CameraControllerError.noCamerasAvailable }
             
@@ -46,9 +49,34 @@ extension CameraController {
                 
                 if camera.position == .back {
                     self.rearCamera = camera
+                    let supportFormats = camera.formats as! [AVCaptureDevice.Format]
+                    var bestFormat: AVCaptureDevice.Format?
+                    for supportFormat in supportFormats {
+                        let dimensions = CMVideoFormatDescriptionGetDimensions(supportFormat.formatDescription)
+                        
+                        print("dimensions : \(dimensions)")
+                        
+                        if dimensions.height != 1080 {
+                            continue
+                        }
+                        
+                        let fpsRanges = supportFormat.videoSupportedFrameRateRanges as! [AVFrameRateRange]
+                        for fpsRange in fpsRanges {
+                            if fpsRange.maxFrameRate >= 60 {
+                                bestFormat = supportFormat
+                                break
+                            }
+                        }
+                        if bestFormat != nil {
+                            break
+                        }
+                    }
                     
                     try camera.lockForConfiguration()
                     camera.focusMode = .continuousAutoFocus
+                    camera.activeFormat = bestFormat
+                    camera.activeVideoMaxFrameDuration = CMTimeMake(1, Int32(60))
+                    camera.activeVideoMinFrameDuration = CMTimeMake(1, Int32(60))
                     camera.unlockForConfiguration()
                 }
             }
